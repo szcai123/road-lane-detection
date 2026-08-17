@@ -18,16 +18,21 @@ pip install -r requirements.txt
 
 ```bash
 # 单张图片
-python -m road_detect.cli image samples/three_lanes.png --out out/vis.png --json out/r.json --bev out/bev.png
+python -m road_detect.cli image samples/three_lanes.png --out out/vis.png --json out/r.json --bev out/bev.png --lines out/lines.png
 
 # 视频（逐帧检测，取众数作为稳定车道数）
 python -m road_detect.cli video drive.mp4 --out out/drive.mp4
 
 # 摄像头实时识别（0 是默认摄像头；也可传手机/IP 摄像头的 rtsp/http 地址）
 python -m road_detect.cli camera 0
-python -m road_detect.cli camera 0 --record out/cam.mp4        # 同时录像
-python -m road_detect.cli camera rtsp://192.168.1.20:554/live  # 网络摄像头
-# 窗口快捷键：q/ESC 退出，s 截图，b 鸟瞰调试图，r 显示 ROI 梯形
+python -m road_detect.cli camera 0 --window-size 960x540        # 初始窗口大小，之后可鼠标拖拽缩放
+python -m road_detect.cli camera 0 --width 1920 --height 1080   # 采集分辨率
+python -m road_detect.cli camera 0 --record out/cam.mp4         # 同时录像
+python -m road_detect.cli camera rtsp://192.168.1.20:554/live   # 网络摄像头
+# 默认会额外弹出 "lane lines (extracted)" 窗口，显示提取出的分割线（白/黄、实/虚编号）
+# 和紫色的鱼骨/导流区；不需要可加 --no-lines 或按 l 关闭
+# 窗口快捷键：q/ESC 退出，s 截图（同时存一张分割线图），l 分割线窗口，b 鸟瞰调试图，r 显示 ROI 梯形
+# 所有窗口都是可自由缩放的（WINDOW_NORMAL）
 # 无图形界面（服务器 / WSL 无 GUI）时加 --headless，只打印 JSON
 
 # 调 ROI：把梯形画到图上，改 config 直到梯形正好套住路面

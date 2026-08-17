@@ -54,6 +54,9 @@ def run_image(args: argparse.Namespace) -> int:
     if args.bev:
         _ensure_parent(args.bev)
         cv2.imwrite(args.bev, visualize.draw_bev(result, cfg))
+    if args.lines:
+        _ensure_parent(args.lines)
+        cv2.imwrite(args.lines, visualize.draw_lines(result, cfg))
     return 0
 
 
@@ -115,19 +118,56 @@ def _open_camera(source: str, width: int, height: int) -> cv2.VideoCapture:
     return cap
 
 
+MAIN_WINDOW = "road_detect  (q quit, s save, l lines, b bev, r roi)"
+LINES_WINDOW = "lane lines (extracted)"
+BEV_WINDOW = "bird eye"
+
+
+_OPEN_WINDOWS: set = set()
+
+
+def _show(window: str, image, size: Optional[tuple] = None) -> None:
+    """Show ``image`` in a window the user can resize freely."""
+    if window not in _OPEN_WINDOWS:
+        cv2.namedWindow(window, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
+        if size:
+            cv2.resizeWindow(window, size[0], size[1])
+        _OPEN_WINDOWS.add(window)
+    cv2.imshow(window, image)
+
+
+def _close(window: str) -> None:
+    if window in _OPEN_WINDOWS:
+        cv2.destroyWindow(window)
+        _OPEN_WINDOWS.discard(window)
+
+
+def _parse_size(text: Optional[str]) -> Optional[tuple]:
+    if not text:
+        return None
+    try:
+        w, h = (int(v) for v in text.lower().replace("*", "x").split("x"))
+    except ValueError:
+        raise SystemExit(f"--window-size expects WxH, got {text!r}")
+    return w, h
+
+
 def run_camera(args: argparse.Namespace) -> int:
     """Live detection from a webcam or a phone/IP camera stream.
 
-    Keys: ``q``/ESC quit, ``s`` snapshot, ``b`` bird's eye view, ``r`` ROI.
+    Keys: ``q``/ESC quit, ``s`` snapshot, ``l`` extracted lines, ``b`` bird's
+    eye view, ``r`` ROI.  All windows can be resized freely with the mouse.
     """
     cfg = _load_cfg(args.config)
     cap = _open_camera(args.input, args.width, args.height)
     detector = RoadMarkingDetector(cfg)
 
+    win_size = _parse_size(args.window_size)
     writer = None
     history: deque = deque(maxlen=max(1, args.smooth))
     show_bev = False
     show_roi = False
+    show_lines = not args.no_lines
     frames = 0
     started = time.time()
 
@@ -171,22 +211,33 @@ def run_camera(args: argparse.Namespace) -> int:
                     break
                 continue
 
-            cv2.imshow("road_detect  (q quit, s save, b bev, r roi)", view)
+            _show(MAIN_WINDOW, view, win_size)
+            if show_lines:
+                _show(LINES_WINDOW, visualize.draw_lines(result, cfg))
             if show_bev:
-                cv2.imshow("bird eye", visualize.draw_bev(result, cfg))
+                _show(BEV_WINDOW, visualize.draw_bev(result, cfg))
             key = cv2.waitKey(1) & 0xFF
             if key in (ord("q"), 27):
                 break
+            if key == ord("l"):
+                show_lines = not show_lines
+                if not show_lines:
+                    _close(LINES_WINDOW)
             if key == ord("b"):
                 show_bev = not show_bev
                 if not show_bev:
-                    cv2.destroyWindow("bird eye")
+                    _close(BEV_WINDOW)
             if key == ord("r"):
                 show_roi = not show_roi
             if key == ord("s"):
-                path = os.path.join(args.snapshot_dir, f"cam_{int(time.time())}.png")
+                stamp = int(time.time())
+                path = os.path.join(args.snapshot_dir, f"cam_{stamp}.png")
                 _ensure_parent(path)
                 cv2.imwrite(path, view)
+                cv2.imwrite(
+                    os.path.join(args.snapshot_dir, f"cam_{stamp}_lines.png"),
+                    visualize.draw_lines(result, cfg),
+                )
                 print(f"saved {path}")
     finally:
         cap.release()
@@ -194,6 +245,7 @@ def run_camera(args: argparse.Namespace) -> int:
             writer.release()
         if not args.headless:
             cv2.destroyAllWindows()
+            _OPEN_WINDOWS.clear()
     return 0
 
 
@@ -227,8 +279,13 @@ def main(argv=None) -> int:
                 "input", nargs="?", default="0",
                 help="camera index (0, 1, ...) or a stream URL",
             )
-            p.add_argument("--width", type=int, default=1280)
-            p.add_argument("--height", type=int, default=720)
+            p.add_argument("--width", type=int, default=1280,
+                           help="requested capture width")
+            p.add_argument("--height", type=int, default=720,
+                           help="requested capture height")
+            p.add_argument("--window-size", help="initial window size, e.g. 960x540")
+            p.add_argument("--no-lines", action="store_true",
+                           help="do not open the extracted lane line window")
             p.add_argument("--smooth", type=int, default=15,
                            help="frames used for the stable lane count")
             p.add_argument("--record", help="write the annotated live view to a video")
@@ -243,6 +300,7 @@ def main(argv=None) -> int:
         if name == "image":
             p.add_argument("--json", help="write the result as JSON")
             p.add_argument("--bev", help="write the bird's eye debug view")
+            p.add_argument("--lines", help="write the extracted lane line view")
 
     args = parser.parse_args(argv)
     return args.func(args)

@@ -83,6 +83,30 @@ def draw_overlay(image_bgr: np.ndarray, result: DetectionResult, cfg: Config) ->
     return out
 
 
+def draw_lines(result: DetectionResult, cfg: Config) -> np.ndarray:
+    """Extracted markings only: the binary paint mask plus the fitted lines."""
+    canvas = cv2.cvtColor(result.mask, cv2.COLOR_GRAY2BGR)
+    canvas = (canvas * 0.45).astype(np.uint8)
+    ys = np.arange(cfg.bev_height)
+
+    for zone in result.hatch_zones:
+        cv2.fillPoly(canvas, [zone.polygon], (120, 0, 120))
+    for i, line in enumerate(result.lines, start=1):
+        pts = np.stack([line.x_at(ys), ys], axis=1).astype(np.int32)
+        cv2.polylines(canvas, [pts], False, _COLOR[line.color], 2)
+        cv2.putText(
+            canvas, f"{i}:{line.color[0]}{line.style[0]}",
+            (max(2, int(line.x_px) - 20), 24),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA,
+        )
+    cv2.putText(
+        canvas, f"lines: {len(result.lines)}  lanes: {result.lane_count}",
+        (10, cfg.bev_height - 12),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA,
+    )
+    return canvas
+
+
 def draw_roi(image_bgr: np.ndarray, cfg: Config) -> np.ndarray:
     out = image_bgr.copy()
     quad = perspective.roi_quad(image_bgr.shape, cfg).astype(np.int32)
