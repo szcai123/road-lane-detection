@@ -23,6 +23,13 @@ python -m road_detect.cli image samples/three_lanes.png --out out/vis.png --json
 # 视频（逐帧检测，取众数作为稳定车道数）
 python -m road_detect.cli video drive.mp4 --out out/drive.mp4
 
+# 摄像头实时识别（0 是默认摄像头；也可传手机/IP 摄像头的 rtsp/http 地址）
+python -m road_detect.cli camera 0
+python -m road_detect.cli camera 0 --record out/cam.mp4        # 同时录像
+python -m road_detect.cli camera rtsp://192.168.1.20:554/live  # 网络摄像头
+# 窗口快捷键：q/ESC 退出，s 截图，b 鸟瞰调试图，r 显示 ROI 梯形
+# 无图形界面（服务器 / WSL 无 GUI）时加 --headless，只打印 JSON
+
 # 调 ROI：把梯形画到图上，改 config 直到梯形正好套住路面
 python -m road_detect.cli roi your_road.jpg --out out/roi.png --config my.json
 ```
